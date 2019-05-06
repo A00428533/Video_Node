@@ -1,6 +1,7 @@
 const express = require('express')
 const exphbs  = require('express-handlebars');
 const app = express()
+const path =require('path')
 const bodyParser = require('body-parser')
 const numcpu = require('os').cpus().length
 const cluster = require('cluster');
@@ -8,7 +9,15 @@ var process = require('process')
 var cors = require('cors');
 const mongoose = require('mongoose')
 const methodOverride = require('method-override')
-const {Idea} =require('./models/Idea.js')
+const flash = require('connect-flash')
+const session = require('express-session')
+const ideas = require('./routes/ideas')
+const users = require('./routes/users')
+const bcrypt = require('bcryptjs')
+const passport = require('passport')
+
+require('./config/passport')(passport)
+
 mongoose.Promise = global.Promise
 
 mongoose.connect('mongodb://localhost/Node',{
@@ -22,15 +31,36 @@ app.use(bodyParser.urlencoded({extended:true}))
 app.use(bodyParser.json());
 app.use(methodOverride('_method'));
 
-app.engine('handlebars', exphbs({defaultLayout: 'main'}));
-app.set('view engine', 'handlebars');
+app.use(express.static(path.join(__dirname,'public')))
+//Express sesion
+app.use(session({
 
+    secret:'secret',
+    resave:true,
+    saveUninitialized:true
+}))
+
+//flash middleware
+
+app.use(flash())
+
+
+app.use('/ideas',ideas)
+app.use('/users',users)
+//Global variables
 app.use((req,res,next)=>{
 
-    req.name='ankush'
+    res.locals.success_msg = req.flash('success_msg')
+    res.locals.error_msg = req.flash('error_msg')
+    res.locals.error = req.flash('error')
     next()
 
 })
+
+
+//handlebars middleware
+app.engine('handlebars', exphbs({defaultLayout: 'main'}));
+app.set('view engine', 'handlebars');
 
 
 app.get('/',(req,res)=>{
@@ -42,103 +72,16 @@ app.get('/',(req,res)=>{
         });
 })
 
-app.get('/ideas/edit/:id',(req,res)=>{
-
-    Idea.findOne({_id:req.params.id}).then(ideas=>{
-
-        res.render('ideas/edit',{
-            ideas:ideas
-        })
-
-    })    
-})
-
-app.put('/ideas/:id',(req,res)=>{
-
-    Idea.findOne({
-        _id:req.params.id
-    })
-    .then(idea=>{
-
-        idea.title=req.body.title,
-        idea.details=req.body.details,
-
-        idea.save()
-        .then(idea=>{
-            res.redirect('/ideas')
-        })
-    }
-
-    )
-})
-
-app.delete('/ideas/:id',(req,res)=>{
-
-    Idea.remove({_id:req.params.id})
-    .then(()=>{
-        res.redirect('/ideas')
-    })
 
 
-})
-
-app.get('/ideas',(req,res)=>{
-
-    Idea.find({})
-        .sort({date:'desc'})
-        .then(ideas=>{
-            res.render('ideas/index',{
-                ideas:ideas
-            })
-        })
-
-    
-})
-
-app.post('/ideas',(req,res)=>{
-    console.log('ankush')
-    let errors =[]
-    if(!req.body.title)
-    {
-    errors.push({text:'Please add the title'})
-    }
-    if(!req.body.details)
-    {
-    errors.push({text:'Please add the description'})
-    }
-    if(errors.length>0){
-        res.render('ideas/add',{
-
-            errors:errors,
-            title:req.body.title,
-            details:req.body.details
-
-        })
-
-    }
-    else{
-
-        const idea = new Idea(req.body)
-
-        idea.save((err,doc)=>{
-
-            if(err) return res.json({success:false,err})
-            res.redirect('/ideas')
-        })
-    }
-})
-
-
-app.get('/ideas/add',(req,res)=>{
-
-    res.render('ideas/add');
-})
-
+//About page
 
 app.get('/about',(req,res)=>{
 
     res.render('about');
 })
+
+
 
 const port=5000
 
